@@ -23,6 +23,12 @@
 #include <locale>
 #include <sstream>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#pragma clang diagnostic ignored "-Wdeprecated"
+#endif
+
 namespace spirv_cross
 {
 
@@ -43,6 +49,7 @@ namespace spirv_cross
 
 #define SPIRV_CROSS_THROW(x) report_and_abort(x)
 #else
+
 class CompilerError : public std::runtime_error
 {
 public:
@@ -113,7 +120,7 @@ inline std::string convert_to_string(float t)
 	// std::to_string for floating point values is broken.
 	// Fallback to something more sane.
 	char buf[64];
-	sprintf(buf, SPIRV_CROSS_FLT_FMT, t);
+	sprintf(buf, SPIRV_CROSS_FLT_FMT, static_cast<double>(t));
 	// Ensure that the literal is float.
 	if (!strchr(buf, '.') && !strchr(buf, 'e'))
 		strcat(buf, ".0");
@@ -151,6 +158,7 @@ struct IVariant
 {
 	virtual ~IVariant() = default;
 	uint32_t self = 0;
+	uint32_t pad0;
 };
 
 enum Types
@@ -180,6 +188,7 @@ struct SPIRUndef : IVariant
 	{
 	}
 	uint32_t basetype;
+	uint32_t pad0;
 };
 
 struct SPIRConstantOp : IVariant
@@ -197,8 +206,10 @@ struct SPIRConstantOp : IVariant
 	}
 
 	spv::Op opcode;
+	uint32_t pad0;
 	std::vector<uint32_t> arguments;
 	uint32_t basetype;
+	uint32_t pad1;
 };
 
 struct SPIRType : IVariant
@@ -245,6 +256,7 @@ struct SPIRType : IVariant
 
 	// Pointers
 	bool pointer = false;
+	uint8_t pad[3];
 	spv::StorageClass storage = spv::StorageClassGeneric;
 
 	std::vector<uint32_t> member_types;
@@ -256,6 +268,7 @@ struct SPIRType : IVariant
 		bool depth;
 		bool arrayed;
 		bool ms;
+		uint8_t pad0;
 		uint32_t sampled;
 		spv::ImageFormat format;
 	} image;
@@ -268,6 +281,8 @@ struct SPIRType : IVariant
 	// Denotes the type which this type is based on.
 	// Allows the backend to traverse how a complex type is built up during access chains.
 	uint32_t parent_type = 0;
+
+	uint32_t pad0;
 
 	// Used in backends to avoid emitting members with conflicting names.
 	std::unordered_set<std::string> member_name_cache;
@@ -291,6 +306,7 @@ struct SPIRExtension : IVariant
 	}
 
 	Extension ext;
+	uint32_t pad0;
 };
 
 // SPIREntryPoint is not a variant since its IDs are used to decorate OpFunction,
@@ -306,6 +322,7 @@ struct SPIREntryPoint
 	SPIREntryPoint() = default;
 
 	uint32_t self = 0;
+	uint32_t pad0;
 	std::string name;
 	std::vector<uint32_t> interface_variables;
 
@@ -338,6 +355,7 @@ struct SPIRExpression : IVariant
 	// Used in amortizing multiple calls to to_expression()
 	// where in certain cases that would quickly force a temporary when not needed.
 	uint32_t base_expression = 0;
+	uint32_t pad0;
 
 	std::string expression;
 	uint32_t expression_type = 0;
@@ -358,6 +376,7 @@ struct SPIRExpression : IVariant
 	// Before use, this expression must be transposed.
 	// This is needed for targets which don't support row_major layouts.
 	bool need_transpose = false;
+	uint8_t pad1[5];
 
 	// A list of expressions which this expression depends on.
 	std::vector<uint32_t> expression_dependencies;
@@ -376,6 +395,7 @@ struct SPIRFunctionPrototype : IVariant
 	}
 
 	uint32_t return_type;
+	uint32_t pad0;
 	std::vector<uint32_t> parameter_types;
 };
 
@@ -477,6 +497,8 @@ struct SPIRBlock : IVariant
 	// If the continue block is complex, fallback to "dumb" for loops.
 	bool complex_continue = false;
 
+	uint16_t pad0;
+
 	// The dominating block which this block might be within.
 	// Used in continue; blocks to determine if we really need to write continue.
 	uint32_t loop_dominator = 0;
@@ -518,6 +540,8 @@ struct SPIRFunction : IVariant
 		// read and write counts as access to the function arguments
 		// is not local to the function in question.
 		bool alias_global_variable;
+		uint8_t pad0;
+		uint16_t pad1;
 	};
 
 	// When calling a function, and we're remapping separate image samplers,
@@ -534,6 +558,7 @@ struct SPIRFunction : IVariant
 		uint32_t sampler_id;
 		bool global_image;
 		bool global_sampler;
+		uint16_t pad0;
 	};
 
 	uint32_t return_type;
@@ -546,6 +571,7 @@ struct SPIRFunction : IVariant
 	std::vector<Parameter> shadow_arguments;
 	std::vector<uint32_t> local_variables;
 	uint32_t entry_block = 0;
+	uint32_t pad0;
 	std::vector<uint32_t> blocks;
 	std::vector<CombinedImageSamplerParameter> combined_parameters;
 
@@ -557,13 +583,14 @@ struct SPIRFunction : IVariant
 	void add_parameter(uint32_t parameter_type, uint32_t id, bool alias_global_variable = false)
 	{
 		// Arguments are read-only until proven otherwise.
-		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable });
+		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable, /* pad0 */ 0, /* pad1 */ 0 });
 	}
 
 	bool active = false;
 	bool flush_undeclared = true;
 	bool do_combined_parameters = true;
 	bool analyzed_variable_scope = false;
+	uint32_t pad1;
 };
 
 struct SPIRVariable : IVariant
@@ -594,6 +621,7 @@ struct SPIRVariable : IVariant
 	// When we read the variable as an expression, just forward
 	// shadowed_id as the expression.
 	bool statically_assigned = false;
+	uint16_t pad0;
 	uint32_t static_expression = 0;
 
 	// Temporaries which can remain forwarded as long as this variable is not modified.
@@ -613,6 +641,7 @@ struct SPIRVariable : IVariant
 	bool loop_variable = false;
 	// Set to true while we're inside the for loop.
 	bool loop_variable_enable = false;
+	uint16_t pad1;
 
 	SPIRFunction::Parameter *parameter = nullptr;
 };
@@ -638,12 +667,14 @@ struct SPIRConstant : IVariant
 	{
 		Constant r[4];
 		uint32_t vecsize;
+		uint32_t pad;
 	};
 
 	struct ConstantMatrix
 	{
 		ConstantVector c[4];
 		uint32_t columns;
+		uint32_t pad;
 	};
 
 	inline uint32_t scalar(uint32_t col = 0, uint32_t row = 0) const
@@ -808,8 +839,10 @@ struct SPIRConstant : IVariant
 	}
 
 	uint32_t constant_type;
+	uint32_t pad0;
 	ConstantMatrix m;
 	bool specialization = false; // If the constant is a specialization constant.
+	uint8_t pad1[7];
 
 	// For composites which are constant arrays, etc.
 	std::vector<uint32_t> subconstants;
@@ -822,6 +855,7 @@ public:
 	Variant() = default;
 	Variant(Variant &&other)
 	{
+		pad0 = 0; // Suppress clang's `-Wunused-private-field' warning.
 		*this = std::move(other);
 	}
 	Variant &operator=(Variant &&other)
@@ -880,6 +914,7 @@ public:
 private:
 	std::unique_ptr<IVariant> holder;
 	uint32_t type = TypeNone;
+	uint32_t pad0;
 };
 
 template <typename T>
@@ -920,11 +955,13 @@ struct Meta
 		uint32_t input_attachment = 0;
 		uint32_t spec_id = 0;
 		bool builtin = false;
+		uint8_t pad0[3];
 	};
 
 	Decoration decoration;
 	std::vector<Decoration> members;
 	uint32_t sampler = 0;
+	uint32_t pad0;
 };
 
 // A user callback that remaps the type of any variable.
@@ -949,5 +986,9 @@ private:
 	std::locale old;
 };
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #endif

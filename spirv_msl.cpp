@@ -21,11 +21,20 @@
 #include <cassert>
 #include <numeric>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wunused-macros"
+//#pragma clang diagnostic ignored "-Wunreachable-code-return"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#endif
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-static const uint32_t k_unknown_location = ~0;
+static const uint32_t k_unknown_location = ~0u;
 
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_)
     : CompilerGLSL(move(spirv_))
@@ -317,7 +326,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	set_decoration(ib_type_id, DecorationBlock);
 
 	uint32_t ib_var_id = next_id++;
-	auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, storage, 0);
+	auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, storage, 0u);
 	var.initializer = next_id++;
 
 	string ib_var_ref;
@@ -564,7 +573,7 @@ uint32_t CompilerMSL::get_input_buffer_block_var_id(uint32_t msl_buffer)
 		set_decoration(ib_type_id, DecorationBlock);
 
 		ib_var_id = next_id++;
-		auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, StorageClassInput, 0);
+		auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, StorageClassInput, 0u);
 		var.initializer = next_id++;
 
 		string ib_var_name = stage_in_var_name + convert_to_string(msl_buffer);
@@ -1238,7 +1247,7 @@ string CompilerMSL::to_component_argument(uint32_t id)
 	if (ids[id].get_type() != TypeConstant)
 	{
 		SPIRV_CROSS_THROW("ID " + to_string(id) + " is not an OpConstant.");
-		return "component::x";
+		//return "component::x";
 	}
 
 	uint32_t component_index = get<SPIRConstant>(id).scalar();
@@ -1256,7 +1265,7 @@ string CompilerMSL::to_component_argument(uint32_t id)
 	default:
 		SPIRV_CROSS_THROW("The value (" + to_string(component_index) + ") of OpConstant ID " + to_string(id) +
 		                  " is not a valid Component index, which must be one of 0, 1, 2, or 3.");
-		return "component::x";
+		//return "component::x";
 	}
 }
 
@@ -2159,7 +2168,7 @@ void CompilerMSL::MemberSorter::sort()
 	// the members should be reordered, based on builtin and sorting aspect meta info.
 	size_t mbr_cnt = type.member_types.size();
 	vector<uint32_t> mbr_idxs(mbr_cnt);
-	iota(mbr_idxs.begin(), mbr_idxs.end(), 0);          // Fill with consecutive indices
+	iota(mbr_idxs.begin(), mbr_idxs.end(), 0); // Fill with consecutive indices
 	std::sort(mbr_idxs.begin(), mbr_idxs.end(), *this); // Sort member indices based on sorting aspect
 
 	// Move type and meta member info to the order defined by the sorted member indices.
